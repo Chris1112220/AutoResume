@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generated Resume</title>
+    <style>
+        body { font-family: Arial; margin: 40px; }
+        h1 { margin-bottom: 0; }
+        .section { margin-top: 30px; }
+        ul { padding-left: 20px; }
+    </style>
+</head>
+<body>
+    <h1>{{ name }}</h1>
+    <p><strong>Target Role:</strong> {{ job_title }}</p>
+
+    <div class="section">
+        <h2>Relevant Accomplishments</h2>
+        <ul>
+            {% for bullet in bullets %}
+                <li>{{ bullet }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+</body>
+</html>
