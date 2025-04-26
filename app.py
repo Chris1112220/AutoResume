@@ -1,9 +1,11 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, render_template, send_file
 from config import SQLALCHEMY_DATABASE_URI
 from models import db, Experience, Accomplishment
-from flask import Flask, jsonify, render_template
+from docx.shared import Pt, RGBColor
 from docx import Document
-from flask import send_file
+from docx.shared import Pt
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
 import io
 
 app = Flask(__name__)
@@ -18,6 +20,66 @@ def extract_keywords(text):
     keywords = [word.strip(".,")
                 for word in words if word not in stopwords and len(word) > 2]
     return set(keywords)
+
+
+def add_hyperlink(paragraph, url, text):
+    """
+    Add a hyperlink to a paragraph that looks like a real hyperlink (blue and underlined).
+    """
+    # Create the w:hyperlink tag and add needed values
+    part = paragraph.part
+    r_id = part.relate_to(
+        url,
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+        is_external=True
+    )
+
+    hyperlink = OxmlElement('w:hyperlink')
+    hyperlink.set(qn('r:id'), r_id)
+
+    # Create a w:r element
+    new_run = OxmlElement('w:r')
+
+    # Create a w:rPr element (run properties)
+    rPr = OxmlElement('w:rPr')
+
+    # Set color to blue
+    color = OxmlElement('w:color')
+    color.set(qn('w:val'), '0000FF')  # Blue color
+    rPr.append(color)
+
+    # Set underline
+    underline = OxmlElement('w:u')
+    underline.set(qn('w:val'), 'single')
+    rPr.append(underline)
+
+    # Style the run like a hyperlink
+    rStyle = OxmlElement('w:rStyle')
+    rStyle.set(qn('w:val'), 'Hyperlink')
+    rPr.append(rStyle)
+
+    new_run.append(rPr)
+
+    # Create a w:t element (the text inside the hyperlink)
+    text_elem = OxmlElement('w:t')
+    text_elem.text = text
+    new_run.append(text_elem)
+
+    hyperlink.append(new_run)
+    paragraph._p.append(hyperlink)
+
+
+def add_tab_stop(paragraph, position_twips):
+    """Add tab stop at specific position (measured in twips)."""
+    pPr = paragraph._p.get_or_add_pPr()
+    tabs = pPr.find(qn('w:tabs'))
+    if tabs is None:
+        tabs = OxmlElement('w:tabs')
+        pPr.append(tabs)
+    tab = OxmlElement('w:tab')
+    tab.set(qn('w:val'), 'right')
+    tab.set(qn('w:pos'), str(position_twips))
+    tabs.append(tab)
 
 
 @app.route('/experiences', methods=['GET'])
@@ -59,7 +121,7 @@ def match_job_description():
 @app.route('/resume', methods=['GET'])
 def generate_resume():
     job_description = """
-    We are looking for an RPA Developer with expertise in UiPath and automation of financial processes.
+    Seeking an RPA Developer with expertise in UiPath, automation, and strong problem-solving skills.
     """
     keywords = extract_keywords(job_description)
 
@@ -68,43 +130,104 @@ def generate_resume():
         if any(keyword.lower() in acc.content.lower() for keyword in keywords):
             matched.append(acc.content)
 
-    return render_template(
-        'resume.html',
-        name="Christopher A. Roberts",
-        job_title="RPA Developer",
-        bullets=matched
-    )
-
-
-@app.route('/resume-docx', methods=['GET'])
-def generate_resume_docx():
-    job_description = """
-    Seeking a skilled RPA Developer with UiPath experience and a strong automation mindset.
-    """
-    keywords = extract_keywords(job_description)
-
-    matched = []
-    for acc in Accomplishment.query.all():
-        if any(keyword.lower() in acc.content.lower() for keyword in keywords):
-            matched.append(acc.content)
-
-    # Create DOCX
+    # Create the Word document
     doc = Document()
-    doc.add_heading("Christopher A. Roberts", level=1)
-    doc.add_paragraph("Target Role: RPA Developer")
 
-    # Education section
-    doc.add_heading("Education", level=2)
+    # 1. Header
+    doc.add_heading("Christopher A. Roberts", level=0)
+
+    header_para = doc.add_paragraph()
+    header_para.paragraph_format.space_after = Pt(0)
+    header_para.paragraph_format.space_before = Pt(0)
+
+    header_para.add_run("Philadelphia, PA | ").font.name = 'Calibri'
+    header_para.add_run(
+        "Christopher.roberts11220@gmail.com | ").font.name = 'Calibri'
+    header_para.add_run("908-963-0613 | ").font.name = 'Calibri'
+
+    # Add GitHub real link
+    add_hyperlink(header_para, "https://github.com/Chris1112220", "GitHub")
+
+    header_para.add_run(" | ").font.name = 'Calibri'
+
+    # Add LinkedIn real link
+    add_hyperlink(
+        header_para, "https://www.linkedin.com/in/christopher-roberts-philadelphia/", "LinkedIn")
+
+    # Technical Skills
+    doc.add_heading("Technical Skills", level=1)
     doc.add_paragraph(
-        "Drexel University — Post-Baccalaureate Certificate in CS Foundations (Jan 2024)")
-    doc.add_paragraph("Temple University — BBA in Finance (Jan 2012)")
+        "RPA Tools: UiPath Studio, StudioX, Orchestrator\n"
+        "Languages: Python, Java, C, HTML, CSS\n"
+        "Databases: MySQL, PostgreSQL, SQLite\n"
+        "Tools: GitHub, SAP, Salesforce, QuickBooks, Excel\n"
+        "Other: Process Mapping, Agile Project Delivery"
+    )
+    doc.add_paragraph()
 
-    # Accomplishments section
-    doc.add_heading("Relevant Accomplishments", level=2)
+    # Professional Experience
+    doc.add_heading("Professional Experience", level=1)
     for bullet in matched:
         doc.add_paragraph(bullet, style='List Bullet')
+    doc.add_paragraph()
 
-    # Export to memory
+    # Projects
+    doc.add_heading("Projects", level=1)
+    doc.add_paragraph(
+        "• Journal Entry Bot – Automated journal entry processing with UiPath.")
+    doc.add_paragraph(
+        "• Auto Bank Reconciliation Bot – Automated reconciliation of 50+ bank accounts.")
+    doc.add_paragraph(
+        "• ACH Download Bot – Automated ACH statement downloads using UiPath and Excel.")
+    doc.add_paragraph()
+
+    # === EDUCATION ===
+    doc.add_heading("Education", level=1)
+
+    # Drexel + Temple in one "invisible" structure, using only line breaks
+    edu_para = doc.add_paragraph()
+    edu_para.paragraph_format.space_after = Pt(0)
+    edu_para.paragraph_format.space_before = Pt(0)
+    add_tab_stop(edu_para, 9360)
+
+    # Drexel
+    drexel_run1 = edu_para.add_run("Drexel University")
+    drexel_run1.bold = True
+    drexel_run1.font.name = 'Calibri'
+    drexel_run1.font.size = Pt(11)
+    edu_para.add_run(
+        ", College of Computing and Informatics, Philadelphia, PA\t")
+    drexel_run2 = edu_para.add_run("January 2024")
+    drexel_run2.font.name = 'Calibri'
+    drexel_run2.font.size = Pt(11)
+
+    edu_para.add_run("\n")  # Just one simple line break
+
+    drexel_degree = edu_para.add_run(
+        "Post-Baccalaureate Graduate Certificate in Computer Science Foundations")
+    drexel_degree.font.name = 'Calibri'
+    drexel_degree.font.size = Pt(11)
+    edu_para.add_run("\n")
+    # Just one simple line break (between Drexel and Temple)
+    edu_para.add_run("\n")
+
+    # Temple
+    temple_run1 = edu_para.add_run("Temple University")
+    temple_run1.bold = True
+    temple_run1.font.name = 'Calibri'
+    temple_run1.font.size = Pt(11)
+    edu_para.add_run(", Fox School of Business — Philadelphia, PA\t")
+    temple_run2 = edu_para.add_run("January 2012")
+    temple_run2.font.name = 'Calibri'
+    temple_run2.font.size = Pt(11)
+
+    edu_para.add_run("\n")
+
+    temple_degree = edu_para.add_run("BBA, Finance")
+    temple_degree.font.name = 'Calibri'
+    temple_degree.font.size = Pt(11)
+
+    # Save the document
     buffer = io.BytesIO()
     doc.save(buffer)
     buffer.seek(0)
@@ -112,7 +235,7 @@ def generate_resume_docx():
     return send_file(
         buffer,
         as_attachment=True,
-        download_name="Resume_RPA_Developer.docx",
+        download_name="Christopher_Roberts_Resume.docx",
         mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
 
