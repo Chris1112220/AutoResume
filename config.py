@@ -1,7 +1,7 @@
 # config.py
 DB_USER = 'postgres'
 DB_PASSWORD = 'Topher1212'
-DB_NAME = 'autoresume'
+DB_NAME = 'autoresume_v2'
 DB_HOST = 'localhost'
 DB_PORT = '5432'
 
