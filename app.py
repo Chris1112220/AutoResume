@@ -1,6 +1,8 @@
 from flask import Flask, jsonify, send_file
 from config import SQLALCHEMY_DATABASE_URI
 from models import db, Education, Company, Job, Accomplishment, TechnicalSkill, Project
+from flask import request, render_template
+
 from docx import Document
 from docx.shared import Pt
 from docx.oxml.ns import qn
@@ -22,7 +24,6 @@ def extract_keywords(text):
 
 
 def add_hyperlink(paragraph, url, text):
-    """Add clickable hyperlink looking like real hyperlink."""
     part = paragraph.part
     r_id = part.relate_to(
         url, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink", is_external=True)
@@ -59,7 +60,12 @@ def add_tab_stop(paragraph, position_twips):
     tabs.append(tab)
 
 
-@app.route('/resume', methods=['GET'])
+@app.route('/', methods=['GET'])
+def index():
+    return render_template('index.html')
+
+
+@app.route('/resume', methods=['POST'])
 def generate_resume():
     job_description = """
     Seeking an RPA Developer with expertise in UiPath, automation, and strong problem-solving skills.
@@ -69,21 +75,11 @@ def generate_resume():
     matched_accomplishments = []
     all_accomplishments = Accomplishment.query.all()
 
-    for acc in all_accomplishments:
-        if any(keyword.lower() in acc.description.lower() for keyword in keywords):
-            matched_accomplishments.append(acc)
-
-    # Fetch technical skills
     tech_skills = TechnicalSkill.query.all()
-
-    # Fetch projects
     projects = Project.query.all()
-
-    # Fetch jobs with companies
     jobs = db.session.query(Job, Company).join(
         Company, Job.company_id == Company.id).all()
 
-    # Start Word document
     doc = Document()
 
     # HEADER
@@ -91,7 +87,6 @@ def generate_resume():
     header_para = doc.add_paragraph()
     header_para.paragraph_format.space_after = Pt(0)
     header_para.paragraph_format.space_before = Pt(0)
-
     header_para.add_run("Philadelphia, PA | ").font.name = 'Calibri'
     header_para.add_run(
         "Christopher.roberts11220@gmail.com | ").font.name = 'Calibri'
@@ -101,81 +96,98 @@ def generate_resume():
     add_hyperlink(
         header_para, "https://www.linkedin.com/in/christopher-roberts-philadelphia/", "LinkedIn")
 
-    doc.add_paragraph()
+    # TECHNICAL SKILLS AND AWARDS
+    doc.add_heading("Technical Skills and Awards", level=1)
+    tech_para = doc.add_paragraph()
+    tech_para.paragraph_format.space_after = Pt(0)
 
-    # TECHNICAL SKILLS
-    doc.add_heading("Technical Skills", level=1)
-    for skill in tech_skills:
-        doc.add_paragraph(skill.name, style='List Bullet')
-    doc.add_paragraph()
+    tech_para.add_run("Programming Languages: ").bold = True
+    tech_para.add_run("Python, Java, C\n")
+    tech_para.add_run("Automation Tools: ").bold = True
+    tech_para.add_run("UiPath Studio, StudioX, Orchestrator\n")
+    tech_para.add_run("Databases: ").bold = True
+    tech_para.add_run("MySQL, PostgreSQL, SQLite\n")
+    tech_para.add_run("Cloud Platforms: ").bold = True
+    tech_para.add_run("AWS, Azure\n")
+    tech_para.add_run("Version Control: ").bold = True
+    tech_para.add_run("GitHub\n")
+    tech_para.add_run("Awards: ").bold = True
+    tech_para.add_run("Streamline Employee of the Quarter 2019")
 
     # PROFESSIONAL EXPERIENCE
     doc.add_heading("Professional Experience", level=1)
+
+    company_dates = {
+        "Drexel University": "March 2021 – Present",
+        "Columbus Construction": "August 2020 – December 2020",
+        "Streamline": "April 2018 – May 2020",
+        "CTI Foods": "November 2014 – March 2018"
+    }
+
     for job, company in jobs:
         job_header = doc.add_paragraph()
-        job_header.add_run(f"{job.title} | {company.name}").bold = True
         job_header.paragraph_format.space_after = Pt(0)
+        p_run = job_header.add_run(f"{company.name}, {company.location}")
+        p_run.bold = True
+        add_tab_stop(job_header, 9360)
+        job_header.add_run("\t")
+        date_run = job_header.add_run(company_dates.get(company.name, ""))
 
-        # Match bullets for this job
-        for acc in matched_accomplishments:
-            if acc.job_id == job.id:
-                doc.add_paragraph(acc.description, style='List Bullet')
+        title_para = doc.add_paragraph()
+        title_para.paragraph_format.space_after = Pt(0)
+        title_run = title_para.add_run(job.title)
+        title_run.italic = True
 
-        doc.add_paragraph()
+        # Always show accomplishments tied to the job
+        job_accomplishments = [
+            acc for acc in all_accomplishments if acc.job_id == job.id]
 
-    # PROJECTS
-    doc.add_heading("Projects", level=1)
+        for acc in job_accomplishments:
+            bullet = doc.add_paragraph(acc.description, style='List Bullet')
+            bullet.paragraph_format.space_after = Pt(0)
+
+        doc.add_paragraph()  # Add space between professional experiences
+
+        # PROJECTS
+    projects_para = doc.add_paragraph()
+    projects_run = projects_para.add_run("Projects | ")
+    projects_run.bold = True
+    add_hyperlink(
+        projects_para, "https://chris-dev-portfolio-one.vercel.app/", "Portfolio")
+
+    # List projects separately (bold project names)
     for proj in projects:
         project_para = doc.add_paragraph()
-        project_para.add_run(f"{proj.name} – ").bold = True
-        project_para.add_run(proj.description)
-        if proj.link:
-            project_para.add_run("\n")
-            add_hyperlink(project_para, proj.link, proj.link)
+        name_run = project_para.add_run(proj.name + " – ")
+        name_run.bold = True
+        desc_run = project_para.add_run(proj.description)
+        desc_run.font.name = 'Calibri'
+        project_para.paragraph_format.space_after = Pt(0)
 
-    doc.add_paragraph()
-
-    # EDUCATION (keeping same format you wanted perfect)
+    # EDUCATION
     doc.add_heading("Education", level=1)
 
-    edu_para = doc.add_paragraph()
-    edu_para.paragraph_format.space_after = Pt(0)
-    edu_para.paragraph_format.space_before = Pt(0)
-    add_tab_stop(edu_para, 9360)
-
-    drexel_run1 = edu_para.add_run("Drexel University")
+    drexel_para = doc.add_paragraph()
+    drexel_para.paragraph_format.space_after = Pt(6)
+    drexel_para.paragraph_format.space_before = Pt(0)
+    add_tab_stop(drexel_para, 9360)
+    drexel_run1 = drexel_para.add_run(
+        "Drexel University, College of Computing and Informatics, Philadelphia, PA")
     drexel_run1.bold = True
-    drexel_run1.font.name = 'Calibri'
-    drexel_run1.font.size = Pt(11)
-    edu_para.add_run(
-        ", College of Computing and Informatics, Philadelphia, PA\t")
-    drexel_run2 = edu_para.add_run("January 2024")
-    drexel_run2.font.name = 'Calibri'
-    drexel_run2.font.size = Pt(11)
+    drexel_para.add_run("\tJanuary 2024")
+    drexel_para.add_run(
+        "\nPost-Baccalaureate Graduate Certificate in Computer Science Foundations")
 
-    edu_para.add_run("\n")
-    drexel_degree = edu_para.add_run(
-        "Post-Baccalaureate Graduate Certificate in Computer Science Foundations")
-    drexel_degree.font.name = 'Calibri'
-    drexel_degree.font.size = Pt(11)
-
-    edu_para.add_run("\n\n")
-
-    temple_run1 = edu_para.add_run("Temple University")
+    temple_para = doc.add_paragraph()
+    temple_para.paragraph_format.space_after = Pt(0)
+    temple_para.paragraph_format.space_before = Pt(6)
+    add_tab_stop(temple_para, 9360)
+    temple_run1 = temple_para.add_run(
+        "Temple University, Fox School of Business — Philadelphia, PA")
     temple_run1.bold = True
-    temple_run1.font.name = 'Calibri'
-    temple_run1.font.size = Pt(11)
-    edu_para.add_run(", Fox School of Business — Philadelphia, PA\t")
-    temple_run2 = edu_para.add_run("January 2012")
-    temple_run2.font.name = 'Calibri'
-    temple_run2.font.size = Pt(11)
+    temple_para.add_run("\tJanuary 2012")
+    temple_para.add_run("\nBBA, Finance")
 
-    edu_para.add_run("\n")
-    temple_degree = edu_para.add_run("BBA, Finance")
-    temple_degree.font.name = 'Calibri'
-    temple_degree.font.size = Pt(11)
-
-    # SAVE
     buffer = io.BytesIO()
     doc.save(buffer)
     buffer.seek(0)
