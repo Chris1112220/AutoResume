@@ -74,11 +74,9 @@ def generate_resume():
 
     matched_accomplishments = []
     all_accomplishments = Accomplishment.query.all()
-
     tech_skills = TechnicalSkill.query.all()
     projects = Project.query.all()
-    jobs = db.session.query(Job, Company).join(
-        Company, Job.company_id == Company.id).all()
+    jobs = db.session.query(Job, Company).join(Company).all()
 
     doc = Document()
 
@@ -96,7 +94,83 @@ def generate_resume():
     add_hyperlink(
         header_para, "https://www.linkedin.com/in/christopher-roberts-philadelphia/", "LinkedIn")
 
-    # TECHNICAL SKILLS AND AWARDS
+    # EDUCATION FIRST
+    doc.add_heading("Education", level=1)
+
+    drexel_para = doc.add_paragraph()
+    drexel_para.paragraph_format.space_after = Pt(6)
+    drexel_para.paragraph_format.space_before = Pt(0)
+    add_tab_stop(drexel_para, 9360)
+    drexel_run1 = drexel_para.add_run(
+        "Drexel University, College of Computing and Informatics, Philadelphia, PA")
+    drexel_run1.bold = True
+    drexel_para.add_run("\tJanuary 2024")
+    drexel_para.add_run(
+        "\nPost-Baccalaureate Graduate Certificate in Computer Science Foundations")
+
+    temple_para = doc.add_paragraph()
+    temple_para.paragraph_format.space_after = Pt(6)
+    temple_para.paragraph_format.space_before = Pt(0)
+    add_tab_stop(temple_para, 9360)
+    temple_run1 = temple_para.add_run(
+        "Temple University, Fox School of Business — Philadelphia, PA")
+    temple_run1.bold = True
+    temple_para.add_run("\tJanuary 2012")
+    temple_para.add_run("\nBBA, Finance")
+
+    # PROFESSIONAL EXPERIENCE
+    doc.add_heading("Professional Experience", level=1)
+
+    company_dates = {
+        "Drexel University": "March 2021 – Present",
+        "Columbus Construction, LLC": "August 2020 – December 2020",
+        "Streamline": "April 2018 – May 2020",
+        "CTI Foods": "November 2014 – March 2018"
+    }
+
+    for job, company in jobs:
+        job_header = doc.add_paragraph()
+        job_header.paragraph_format.space_after = Pt(0)
+        job_header.paragraph_format.space_before = Pt(6)
+        p_run = job_header.add_run(f"{company.name}, {company.location}")
+        p_run.bold = True
+        add_tab_stop(job_header, 9360)
+        job_header.add_run("\t")
+        job_header.add_run(company_dates.get(company.name, ""))
+
+        title_para = doc.add_paragraph()
+        title_para.paragraph_format.space_after = Pt(0)
+        title_para.paragraph_format.space_before = Pt(0)
+        title_run = title_para.add_run(job.title)
+        title_run.italic = True
+
+        job_accomplishments = [
+            acc for acc in all_accomplishments if acc.job_id == job.id]
+
+        for acc in job_accomplishments:
+            bullet = doc.add_paragraph(acc.content, style='List Bullet')
+            bullet.paragraph_format.space_after = Pt(0)
+            bullet.paragraph_format.space_before = Pt(0)
+
+    # PROJECTS SECTION
+    doc.add_heading("Projects", level=1)
+
+    portfolio_para = doc.add_paragraph()
+    portfolio_para.paragraph_format.space_after = Pt(0)
+    portfolio_para.paragraph_format.space_before = Pt(0)
+    add_hyperlink(portfolio_para,
+                  "https://chris-dev-portfolio-one.vercel.app/", "Portfolio")
+
+    for proj in projects:
+        project_para = doc.add_paragraph()
+        project_para.paragraph_format.space_after = Pt(0)
+        project_para.paragraph_format.space_before = Pt(0)
+        name_run = project_para.add_run(proj.name + " – ")
+        name_run.bold = True
+        desc_run = project_para.add_run(proj.description)
+        desc_run.font.name = 'Calibri'
+
+    # TECHNICAL SKILLS AND AWARDS (LAST)
     doc.add_heading("Technical Skills and Awards", level=1)
     tech_para = doc.add_paragraph()
     tech_para.paragraph_format.space_after = Pt(0)
@@ -114,80 +188,7 @@ def generate_resume():
     tech_para.add_run("Awards: ").bold = True
     tech_para.add_run("Streamline Employee of the Quarter 2019")
 
-    # PROFESSIONAL EXPERIENCE
-    doc.add_heading("Professional Experience", level=1)
-
-    company_dates = {
-        "Drexel University": "March 2021 – Present",
-        "Columbus Construction": "August 2020 – December 2020",
-        "Streamline": "April 2018 – May 2020",
-        "CTI Foods": "November 2014 – March 2018"
-    }
-
-    for job, company in jobs:
-        job_header = doc.add_paragraph()
-        job_header.paragraph_format.space_after = Pt(0)
-        p_run = job_header.add_run(f"{company.name}, {company.location}")
-        p_run.bold = True
-        add_tab_stop(job_header, 9360)
-        job_header.add_run("\t")
-        date_run = job_header.add_run(company_dates.get(company.name, ""))
-
-        title_para = doc.add_paragraph()
-        title_para.paragraph_format.space_after = Pt(0)
-        title_run = title_para.add_run(job.title)
-        title_run.italic = True
-
-        # Always show accomplishments tied to the job
-        job_accomplishments = [
-            acc for acc in all_accomplishments if acc.job_id == job.id]
-
-        for acc in job_accomplishments:
-            bullet = doc.add_paragraph(acc.description, style='List Bullet')
-            bullet.paragraph_format.space_after = Pt(0)
-
-        doc.add_paragraph()  # Add space between professional experiences
-
-        # PROJECTS
-    projects_para = doc.add_paragraph()
-    projects_run = projects_para.add_run("Projects | ")
-    projects_run.bold = True
-    add_hyperlink(
-        projects_para, "https://chris-dev-portfolio-one.vercel.app/", "Portfolio")
-
-    # List projects separately (bold project names)
-    for proj in projects:
-        project_para = doc.add_paragraph()
-        name_run = project_para.add_run(proj.name + " – ")
-        name_run.bold = True
-        desc_run = project_para.add_run(proj.description)
-        desc_run.font.name = 'Calibri'
-        project_para.paragraph_format.space_after = Pt(0)
-
-    # EDUCATION
-    doc.add_heading("Education", level=1)
-
-    drexel_para = doc.add_paragraph()
-    drexel_para.paragraph_format.space_after = Pt(6)
-    drexel_para.paragraph_format.space_before = Pt(0)
-    add_tab_stop(drexel_para, 9360)
-    drexel_run1 = drexel_para.add_run(
-        "Drexel University, College of Computing and Informatics, Philadelphia, PA")
-    drexel_run1.bold = True
-    drexel_para.add_run("\tJanuary 2024")
-    drexel_para.add_run(
-        "\nPost-Baccalaureate Graduate Certificate in Computer Science Foundations")
-
-    temple_para = doc.add_paragraph()
-    temple_para.paragraph_format.space_after = Pt(0)
-    temple_para.paragraph_format.space_before = Pt(6)
-    add_tab_stop(temple_para, 9360)
-    temple_run1 = temple_para.add_run(
-        "Temple University, Fox School of Business — Philadelphia, PA")
-    temple_run1.bold = True
-    temple_para.add_run("\tJanuary 2012")
-    temple_para.add_run("\nBBA, Finance")
-
+    # OUTPUT
     buffer = io.BytesIO()
     doc.save(buffer)
     buffer.seek(0)
